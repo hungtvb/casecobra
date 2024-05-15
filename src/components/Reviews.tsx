@@ -44,7 +44,7 @@ const ReviewColumn = ({reviews, className, reviewClassName, msPerPixel = 0}:
 
 
     return (
-      <div ref={columnRef} className={cn("animate-marqueeUp space-y-8 py-4", className)} style={{'--marquee-duration': duration} as React.CSSProperties}>
+      <div ref={columnRef} className={cn("space-y-8 py-4", className)} style={{'--marquee-duration': duration} as React.CSSProperties}>
         {reviews.concat(reviews).map((imgSrc, reviewIndex) => (
           <Review imgSrc={imgSrc} key={reviewIndex} className={reviewClassName?.(reviewIndex % reviews.length)} />
         ))}
@@ -85,13 +85,13 @@ const ReviewGrid = () => {
             <ReviewColumn reviews={[...column1, ...column3.flat(), ...column2]} reviewClassName={(reviewIndex) => cn({
               "md:hidden": reviewIndex >= column1.length + column3[0].length,
               "lg:hidden": reviewIndex >= column1.length
-            })} msPerPixel={10} />
+            })} msPerPixel={10} className="animate-marqueeUp"/>
             <ReviewColumn reviews={[ ...column2]} 
               className="hidden md:block animate-marqueeDown"
               reviewClassName={(reviewIndex) => reviewIndex >= column2.length ? 'lg:hidden' : ''} msPerPixel={15} />
             <ReviewColumn reviews={column3.flat()} 
-              className="hidden md:block"
-              msPerPixel={10} />
+              className="hidden md:block animate-marqueeUp"
+              msPerPixel={15} />
             </> : null}
             <div className="pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-slate-50"></div>
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-slate-50"></div>
