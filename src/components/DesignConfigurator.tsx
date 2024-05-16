@@ -14,6 +14,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from "./ui/button";
 import { ArrowRight, Check, ChevronsUpDown } from "lucide-react";
 import { BASE_PRICE } from "@/constants";
+import { useToast } from "./ui/use-toast";
+import { useUploadThing } from "@/lib/uploadthing";
 
 interface DesignConfiguratorProps {
     configId: string,
@@ -23,7 +25,8 @@ interface DesignConfiguratorProps {
 }
 
 const DesignConfigurator = ({configId, imageUrl, width, height}: DesignConfiguratorProps) => {
-
+    const {toast} = useToast();
+    const {startUpload} = useUploadThing('imageUploader');
     const [options, setOptions] = useState<
         {   color: (typeof COLORS)[number], 
             model: (typeof MODELS.options)[number],
@@ -35,23 +38,83 @@ const DesignConfigurator = ({configId, imageUrl, width, height}: DesignConfigura
         material: MATERIALS.options[0],
         finish: FINISHES.options[0]
     })
+    
+    const [renderDimension, setRenderDimension] = useState({
+        width: width / 4,
+        height: width / 4
+    })
 
+    const [renderPosition, setRenderPosition] = useState({
+        x: 150,
+        y: 205
+    })
+
+    const phoneCaseRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    const saveConfiguration = async () => {
+        try {
+            const {left: caseLeft, top: caseTop, width: phoneWidth, height: phoneHeight} = phoneCaseRef.current!.getBoundingClientRect();
+            const {left: containerLeft, top: containerTop} = containerRef.current!.getBoundingClientRect();
+
+            const leftOffset = caseLeft - containerLeft;
+            const topOffset = caseTop - containerTop;
+
+            const actualX = renderPosition.x - leftOffset;
+            const actualY = renderPosition.y - topOffset;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = phoneWidth;
+            canvas.height = phoneHeight;
+            
+            const ctx = canvas.getContext('2d');
+            const userImage = new Image();
+            userImage.crossOrigin = 'anonymous'
+            userImage.src = imageUrl;
+            await new Promise((resolve) => userImage.onload = resolve)
+            ctx?.drawImage(userImage, actualX, actualY, renderDimension.width, renderDimension.height);
+            const base64 = canvas.toDataURL();
+            const base64Data = base64.split(',')[1];
+            const base64Response = await fetch(`data:image/png;base64,${base64Data}`);
+            const blob = await base64Response.blob();
+            const file = new File([blob], "filename.png", {type: "image/png"});
+            startUpload([file], {configId});
+        } catch (error) {
+            toast({
+                title: "Error while save the configuration",
+                description: "Please try again!",
+                variant: "destructive"
+            })
+        }
+    }
 
     return (
-        <div className="relative mt-20 grid grid-cols-3 mb-20 pb-20">
-            <div className="relative h-[37.5rem] overflow-hidden col-span-2 w-full max-w-4xl flex justify-center items-center rounded-lg border-2 border-dashed border-gray-300 p-12 text-center focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
+        <div className="relative mt-20 grid grid-cols-1 lg:grid-cols-3 mb-20 pb-20">
+            <div ref={containerRef} className="relative h-[37.5rem] overflow-hidden col-span-2 w-full max-w-4xl flex justify-center items-center rounded-lg border-2 border-dashed border-gray-300 p-12 text-center focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
                 <div className="relative w-60 bg-opacity-50 pointer-events-none aspect-[896/1831]">
-                    <AspectRatio ratio={896/1831} className="pointer-events-none aspect-[896/1831] relative z-50 w-full">
+                    <AspectRatio ref={phoneCaseRef} ratio={896/1831} className="pointer-events-none aspect-[896/1831] relative z-50 w-full">
                         <NextImage alt="phone image" src="/phone-template.png" fill className="pointer-events-none z-50 select-none" />
                     </AspectRatio>
                     <div className="absolute z-40 left-[3px] right-[3px] top-px bottom-px rounded-[32px] shadow-[0_0_0_99999px_rgba(229,231,235,0.6)]"></div>
                     <div className={cn("absolute left-[3px] right-[3px] top-px bottom-px rounded-[32px]", `bg-${options.color.tw}`)}></div>
                 </div>
                 <Rnd default={{
-                    x: 0,
-                    y: 50,
-                    width: width / 10,
-                    height: height / 10
+                    x: 150,
+                    y: 205,
+                    width: width / 4,
+                    height: height / 4
+                }}
+                onResizeStop={(_, __, ref, ___, {x, y}) => {
+                    setRenderDimension({
+                        width: parseInt(ref.style.width.slice(0, -2)),
+                        height: parseInt(ref.style.height.slice(0, -2))
+                    })
+
+                    setRenderPosition({x, y})
+                }}
+                onDragStop={(_, data) => {
+                    const {x, y} = data
+                    setRenderPosition({x, y})
                 }}
                 className="absoulte z-20 border-[2px] border-primary"
                 lockAspectRatio
@@ -66,7 +129,7 @@ const DesignConfigurator = ({configId, imageUrl, width, height}: DesignConfigura
                     </div>
                 </Rnd>
             </div>
-            <div className="h-[37.5rem] flex flex-col bg-white">
+            <div className="h-[37.5rem] w-full grid-cols-full lg:grid-cols-1 flex flex-col bg-white">
                 <ScrollArea className="relative flex-1 overflow-auto">
                     <div aria-hidden="true" className="absolute z-10 inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white pointer-events-none">
                     </div>
@@ -113,7 +176,7 @@ const DesignConfigurator = ({configId, imageUrl, width, height}: DesignConfigura
                                     </DropdownMenu>
                                 </div>
                                 {[MATERIALS, FINISHES].map(({name, options: selectableOptions}) => (
-                                    <RadioGroup key={name} value={options[name]} onChange={(val) => {
+                                    <RadioGroup key={name} value={options[name as keyof typeof options]} onChange={(val) => {
                                         setOptions((prev) => ({
                                             ...prev,
                                             [name]: val
@@ -131,7 +194,7 @@ const DesignConfigurator = ({configId, imageUrl, width, height}: DesignConfigura
                                                                 {option.label}
                                                             </RadioLabel>
                                                             {option.description ? 
-                                                            (<Description as="span" className={'text-gray-500'}>
+                                                            (<Description as="span" className={'text-gray-500 text-xs'}>
                                                                 <span className="block sm:inline">{option.description}</span>
                                                             </Description>) : null}
                                                         </span>
@@ -155,7 +218,7 @@ const DesignConfigurator = ({configId, imageUrl, width, height}: DesignConfigura
                     <div className="h-full w-full flex justify-end items-center">
                         <div className="flex items-center w-full gap-6">
                             <p className="font-medium whitespace-nowrap">{formatPrice((BASE_PRICE + options.material.price + options.finish.price) / 100)}</p>
-                            <Button size={"sm"} className="w-full">
+                            <Button onClick={saveConfiguration} size={"sm"} className="w-full">
                                 Continue
                                 <ArrowRight className="w-4 h-4 ml-1.5 inline"/>
                             </Button>
